@@ -1,5 +1,5 @@
 // PocketWaifu — Lucy, a maid for the Bruce JS interpreter (MicroQuickJS).
-// Not a firmware. The file lives on the microSD at /BruceJS.
+// Not a firmware. The file lives on the microSD at /BruceJS/lucy.
 // Pixel art is drawFillRect on the glass, the same idea as the Flappy Bird sample.
 // No offscreen sprite. Menus use dialog.choice, which waits on the wheel.
 // Wi-Fi is not stored and not started here. Connect from the Bruce menu
@@ -8,7 +8,7 @@
 //
 // (a) On-screen text is English. Bruce's built-in font is ASCII.
 // (b) Heap stays small: system prompt plus 4 reply pairs, max_tokens 120, gc() after each answer.
-// (c) The DeepSeek key is only read from config.json. Mood and the last lines live in lucy.json.
+// (c) The DeepSeek key is only read from /BruceJS/lucy/config.json. Mood and the last lines live in /BruceJS/lucy/save.json.
 
 var display = require("display");
 var keyboard = require("keyboard");
@@ -17,8 +17,11 @@ var dialog = require("dialog");
 var wifi = require("wifi");
 
 var API_URL = "https://api.deepseek.com/chat/completions";
-var CONFIG_PATH = "/pocketwaifu/config.json";
-var SAVE_PATH = "/pocketwaifu/lucy.json";
+var CONFIG_PATH = "/BruceJS/lucy/config.json";
+var SAVE_PATH = "/BruceJS/lucy/save.json";
+var DATA_DIR = "/BruceJS/lucy";
+var CONFIG_PATHS = [CONFIG_PATH, "/lucy/config.json", "/pocketwaifu/config.json"];
+var SAVE_PATHS = [SAVE_PATH, "/lucy/save.json", "/pocketwaifu/lucy.json"];
 var MAX_PAIRS = 4;
 var MAX_TOKENS = 120;
 
@@ -99,6 +102,8 @@ var COL_PANEL = 0;
 var COL_BAR = 0;
 
 var lastMaxScroll = 0;
+var portraitOn = false;
+var FACE_DIR = "/BruceJS/lucy/faces/";
 
 function initColors() {
     COL_WALL = display.color(255, 214, 196);
@@ -123,6 +128,13 @@ function initColors() {
     COL_DIM = display.color(140, 104, 96);
     COL_PANEL = display.color(255, 246, 236);
     COL_BAR = display.color(244, 150, 168);
+}
+
+function layoutPortrait() {
+    OX = 0;
+    OY = 0;
+    PANEL_X = 136;
+    FLOOR_Y = H;
 }
 
 function layout() {
@@ -394,7 +406,55 @@ function wrapText(text, maxChars) {
     return lines;
 }
 
-function drawScene(faceName, reply, scroll) {
+var faceNames = null;
+
+function knownFaces() {
+    if (faceNames) return faceNames;
+    faceNames = { _listed: false };
+    var names = null;
+    try {
+        names = storage.readdir(sdPath("/BruceJS/lucy/faces"));
+    } catch (errList) {
+        names = null;
+    }
+    if (!names || !names.length) return faceNames;
+    var i;
+    var text;
+    var slash;
+    for (i = 0; i < names.length; i++) {
+        text = names[i] && names[i].name ? names[i].name : names[i];
+        text = String(text || "");
+        slash = text.lastIndexOf("/");
+        if (slash >= 0) text = text.substring(slash + 1);
+        if (!text) continue;
+        faceNames[text] = true;
+        faceNames._listed = true;
+    }
+    return faceNames;
+}
+
+function drawPortrait(faceName) {
+    var fileName = (faceName || "shy") + ".jpg";
+    var known = knownFaces();
+    if (known._listed && !known[fileName]) return false;
+    try {
+        display.drawJpg(sdPath(FACE_DIR + fileName), 0, 0, false);
+        display.drawFillRect(128, 0, W - 128, H, COL_WALL);
+        return true;
+    } catch (errJpg) {
+        return false;
+    }
+}
+
+function drawScene(faceName, reply, scroll, fullPaint) {
+    if (fullPaint) {
+        portraitOn = drawPortrait(faceName);
+        if (portraitOn) layoutPortrait();
+        else {
+            layout();
+            drawLucy(faceName);
+        }
+    }
     var textX = PANEL_X + 8;
     var maxChars = Math.floor((W - textX - 8) / 6);
     if (maxChars < 10) maxChars = 10;
@@ -403,7 +463,6 @@ function drawScene(faceName, reply, scroll) {
     var bottom = FLOOR_Y - 8;
     var maxVis = Math.floor((bottom - top) / lineH);
     if (maxVis < 3) maxVis = 3;
-    drawLucy(faceName);
     display.drawFillRect(PANEL_X, 6, W - PANEL_X - 4, FLOOR_Y - 12, COL_PANEL);
     frame(PANEL_X, 6, W - PANEL_X - 4, FLOOR_Y - 12, COL_BASE);
     display.setTextSize(2);
@@ -429,7 +488,7 @@ function drawScene(faceName, reply, scroll) {
 }
 
 function drawThinking(faceName, reply, scroll) {
-    drawScene(faceName, reply, scroll);
+    drawScene(faceName, reply, scroll, true);
     display.drawFillRect(PANEL_X + 4, FLOOR_Y - 28, W - PANEL_X - 12, 14, COL_BAR);
     display.setTextSize(1);
     display.setTextColor(COL_INK, COL_BAR);
@@ -489,14 +548,30 @@ function sdPath(path) {
     return { fs: "sd", path: path };
 }
 
-function loadConfig() {
-    config = { deepseekToken: "" };
+function readSd(path) {
     var raw = null;
     try {
-        raw = storage.read(sdPath(CONFIG_PATH));
+        raw = storage.read(sdPath(path));
     } catch (err) {
         raw = null;
     }
+    if (!raw) return null;
+    return raw;
+}
+
+function readFirst(paths) {
+    var i;
+    var raw;
+    for (i = 0; i < paths.length; i++) {
+        raw = readSd(paths[i]);
+        if (raw) return raw;
+    }
+    return null;
+}
+
+function loadConfig() {
+    config = { deepseekToken: "" };
+    var raw = readFirst(CONFIG_PATHS);
     if (!raw) return;
     try {
         var data = JSON.parse(raw);
@@ -512,7 +587,7 @@ function cleanToken(raw) {
 
 function ensureToken() {
     if (config.deepseekToken && config.deepseekToken.indexOf("sk-") === 0) return true;
-    showError("Put an sk- key in /pocketwaifu/config.json");
+    showError("Put an sk- key in /BruceJS/lucy/config.json");
     return false;
 }
 
@@ -906,7 +981,7 @@ function savedTurns(messages) {
 
 function saveLucy(messages) {
     try {
-        storage.mkdir(sdPath("/pocketwaifu"));
+        storage.mkdir(sdPath(DATA_DIR));
     } catch (errMk) {}
     var payload = JSON.stringify({
         horny: mood.horny,
@@ -927,12 +1002,7 @@ function loadLucy() {
     var messages = [{ role: "system", content: buildPrompt() }];
     var reply = "Welcome my Master";
     var faceName = "shy";
-    var raw = null;
-    try {
-        raw = storage.read(sdPath(SAVE_PATH));
-    } catch (errRead) {
-        raw = null;
-    }
+    var raw = readFirst(SAVE_PATHS);
     if (raw) {
         try {
             var data = JSON.parse(raw);
@@ -1067,25 +1137,30 @@ function run(saved) {
     var reply = saved.reply;
     var scroll = 0;
     var dirty = true;
+    var fullPaint = true;
     while (true) {
         if (dirty) {
-            scroll = drawScene(faceName, reply, scroll);
+            scroll = drawScene(faceName, reply, scroll, fullPaint);
             dirty = false;
+            fullPaint = true;
         }
         var key = pollNav();
         if (key === "prev") {
             if (scroll > 0) {
                 scroll--;
+                fullPaint = false;
                 dirty = true;
             }
         } else if (key === "next") {
             if (scroll < lastMaxScroll) {
                 scroll++;
+                fullPaint = false;
                 dirty = true;
             }
         } else if (key === "esc") {
             return;
         } else if (key === "sel") {
+            fullPaint = true;
             var choice = pickFromMenu();
             dirty = true;
             if (choice) {
@@ -1112,7 +1187,7 @@ function main() {
         H = 170;
     }
     layout();
-    drawScene("shy", "Welcome my Master", 0);
+    drawScene("shy", "Welcome my Master", 0, true);
     if (!wifiUp()) {
         wifiMessage();
         return;

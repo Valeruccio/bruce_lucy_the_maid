@@ -1,4 +1,4 @@
-// Tiny DeepSeek check. Reads /pocketwaifu/config.json and sends one header.
+// Tiny DeepSeek check. Reads /BruceJS/lucy/config.json and sends one header.
 // GET /user/balance has no prompt and no body.
 
 var display = require("display");
@@ -7,7 +7,7 @@ var storage = require("storage");
 var wifi = require("wifi");
 
 var API_URL = "https://api.deepseek.com/user/balance";
-var CONFIG_PATH = "/pocketwaifu/config.json";
+var CONFIG_PATHS = ["/BruceJS/lucy/config.json", "/lucy/config.json", "/pocketwaifu/config.json"];
 
 var W = 320;
 var H = 170;
@@ -30,10 +30,14 @@ function tailOf(token) {
 
 function readConfig() {
     var raw = "";
-    try {
-        raw = storage.read(sdPath(CONFIG_PATH));
-    } catch (err) {
-        raw = "";
+    var i;
+    for (i = 0; i < CONFIG_PATHS.length; i++) {
+        try {
+            raw = storage.read(sdPath(CONFIG_PATHS[i]));
+        } catch (err) {
+            raw = "";
+        }
+        if (raw) break;
     }
     if (!raw) raw = "";
     raw = String(raw);
@@ -60,7 +64,6 @@ function readConfig() {
     var token = scanned.length >= parsed.length ? scanned : parsed;
     return {
         rawLen: raw.length,
-        hasEnd: raw.indexOf("85e8") >= 0,
         parsedLen: parsed.length,
         scanLen: scanned.length,
         token: token
@@ -157,9 +160,9 @@ function main() {
     }
     var cfg = readConfig();
     var token = cfg.token;
-    var note = "raw " + cfg.rawLen + " end " + (cfg.hasEnd ? "yes" : "no") + " scan " + cfg.scanLen + " json " + cfg.parsedLen;
+    var note = "raw " + cfg.rawLen + " scan " + cfg.scanLen + " json " + cfg.parsedLen;
     if (!token || token.indexOf("sk-") !== 0) {
-        holdScreen("Key", note + " No sk- key in /pocketwaifu/config.json");
+        holdScreen("Key", note + " No sk- key in /BruceJS/lucy/config.json");
         return;
     }
     note = note + " use " + token.length + " ends " + tailOf(token);

@@ -24,6 +24,6 @@ Put the files on the card with a reader, or through Bruce: **Files → WebUI**, 
 1. Open **JS Interpreter → pocketwaifu.js**. Lucy is drawn before any file is read.
 2. Join Wi-Fi from the Bruce menu **Connect to WiFi** before you open the script. The script does not connect by itself and does not store the password. If Wi-Fi is off, it says so and returns to the menu.
 3. Put the API key in `/pocketwaifu/config.json` as `deepseekToken`. It starts with `sk-` and comes from [platform.deepseek.com](https://platform.deepseek.com). The script only reads that file. HTTP 401 means DeepSeek refused the key that is already there.
-4. Click an action: Praise, Hug, Pet, Thank, Scold, Question, Order, or Write to her. Write to her opens the keyboard. The side button leaves the script.
+4. A click opens Actions, Write to her, and Status. Actions lists Praise, Hug, Kiss, Pet, Pay, Thank, Scold, Question, and Order. Write to her opens an empty keyboard. Status shows Horny, Bored, Poverty, Stress, Affection, and Confidence. Back from Status returns to that menu. The side button on her scene leaves the script.
 
-There is no character list and no free-text chat. Her face is drawn in the script. Nine expressions cover the emotion tag she sends back.
+Her mood and the last lines are kept in `/pocketwaifu/lucy.json`. Her face is drawn in the script. Nine expressions cover the emotion tag she sends back.

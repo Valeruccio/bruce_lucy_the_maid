@@ -13,7 +13,7 @@ BruceJS/lucy/pocketwaifu.js
 BruceJS/lucy/config.example.json
 ```
 
-`lucy` is her own folder inside `BruceJS`. The interpreter shows it as **[ lucy ]**, so the script is not in the main list. Open **pocketwaifu** inside that folder. Her nine portraits are in `lucy/faces`.
+`lucy` is her own folder inside `BruceJS`. The interpreter shows it as **[ lucy ]**, so the script is not in the main list. Open **pocketwaifu** inside that folder. Her nine portraits are in `lucy/faces`. A full-screen scene for each stat at 100 is in `lucy/scenes`.
 
 Copy `config.example.json` to `config.json` in that same folder and paste the key. After she answers, the game writes `save.json` there.
 
@@ -32,6 +32,6 @@ Put the files on the card with a reader, or through Bruce: **Files → WebUI**, 
 1. Open **JS Interpreter → [ lucy ] → pocketwaifu**. Lucy is drawn before any file is read.
 2. Join Wi-Fi from the Bruce menu **Connect to WiFi** before you open the script. The script does not connect by itself and does not store the password. If Wi-Fi is off, it says so and returns to the menu.
 3. Put the API key in `/BruceJS/lucy/config.json` as `deepseekToken`. It starts with `sk-` and comes from [platform.deepseek.com](https://platform.deepseek.com). The script only reads that file. HTTP 401 means DeepSeek refused the key that is already there.
-4. A click opens Actions, Write to her, and Status. Actions lists Praise, Hug, Kiss, Pet, Pay, Thank, Scold, Question, and Order. Write to her opens an empty keyboard. Status shows Horny, Bored, Poverty, Stress, Affection, and Confidence. Back from Status returns to that menu. The side button on her scene leaves the script.
+4. A click opens Actions, Write to her, and Status. Actions lists Praise, Hug, Kiss, Pet, Pay, Thank, Scold, Question, Order, Condemnation, Ignoring, Slap, and Flog. Write to her opens an empty keyboard. Status shows Horny, Bored, Poverty, Stress, Affection, and Confidence. Back from Status returns to that menu. The side button on her scene leaves the script.
 
-Her mood and the last lines are kept in `/BruceJS/lucy/save.json`. Her face is drawn in the script. Nine expressions cover the emotion tag she sends back.
+Her mood and the last lines are kept in `/BruceJS/lucy/save.json`. Nine portraits cover the emotion tag she sends back. When a stat first reaches 100, its scene fills the screen until a click.

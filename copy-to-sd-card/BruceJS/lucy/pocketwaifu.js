@@ -7,7 +7,7 @@
 // Old syntax on purpose: var and function. No let, arrows, classes, or template strings.
 //
 // (a) On-screen text is English. Bruce's built-in font is ASCII.
-// (b) Heap stays small: system prompt plus 4 reply pairs, max_tokens 120, gc() after each answer.
+// (b) Heap stays small: system prompt plus 4 reply pairs, max_tokens 180, gc() after each answer.
 // (c) The DeepSeek key is only read from /BruceJS/lucy/config.json. Mood and the last lines live in /BruceJS/lucy/save.json.
 
 var display = require("display");
@@ -23,7 +23,7 @@ var DATA_DIR = "/BruceJS/lucy";
 var CONFIG_PATHS = [CONFIG_PATH, "/lucy/config.json", "/pocketwaifu/config.json"];
 var SAVE_PATHS = [SAVE_PATH, "/lucy/save.json", "/pocketwaifu/lucy.json"];
 var MAX_PAIRS = 4;
-var MAX_TOKENS = 120;
+var MAX_TOKENS = 180;
 
 var SYSTEM_PROMPT =
     "You are Lucy, a shy caring maid. You try very hard to please your Master and to do everything correctly, but you sometimes make small mistakes. " +
@@ -34,7 +34,7 @@ var SYSTEM_PROMPT =
     "Short, finished, in English.";
 
 var MENU = ["Actions", "Write to her", "Status"];
-var ACTIONS = ["Praise", "Hug", "Kiss", "Pet", "Pay", "Thank", "Scold", "Question", "Order"];
+var ACTIONS = ["Praise", "Hug", "Kiss", "Pet", "Pay", "Thank", "Scold", "Question", "Order", "Condemnation", "Ignoring", "Slap", "Flog"];
 var mood = { horny: 15, bored: 20, poverty: 20, stress: 15, affection: 20, confidence: 25 };
 
 var FACE_OF = {
@@ -104,6 +104,9 @@ var COL_BAR = 0;
 var lastMaxScroll = 0;
 var portraitOn = false;
 var FACE_DIR = "/BruceJS/lucy/faces/";
+var SCENE_DIR = "/BruceJS/lucy/scenes/";
+var PEAK_ORDER = ["poverty", "stress", "bored", "confidence", "affection", "horny"];
+var peakSeen = { horny: false, bored: false, poverty: false, stress: false, affection: false, confidence: false };
 
 function initColors() {
     COL_WALL = display.color(255, 214, 196);
@@ -444,6 +447,70 @@ function drawPortrait(faceName) {
     } catch (errJpg) {
         return false;
     }
+}
+
+var sceneNames = null;
+
+function knownScenes() {
+    if (sceneNames) return sceneNames;
+    sceneNames = { _listed: false };
+    var names = null;
+    try {
+        names = storage.readdir(sdPath("/BruceJS/lucy/scenes"));
+    } catch (errScenes) {
+        names = null;
+    }
+    if (!names || !names.length) return sceneNames;
+    var i;
+    var text;
+    var slash;
+    for (i = 0; i < names.length; i++) {
+        text = names[i] && names[i].name ? names[i].name : names[i];
+        text = String(text || "");
+        slash = text.lastIndexOf("/");
+        if (slash >= 0) text = text.substring(slash + 1);
+        if (!text) continue;
+        sceneNames[text] = true;
+        sceneNames._listed = true;
+    }
+    return sceneNames;
+}
+
+function drawSceneCard(statName) {
+    var fileName = statName + ".jpg";
+    var known = knownScenes();
+    if (!known._listed || !known[fileName]) return false;
+    try {
+        display.drawJpg(sdPath(SCENE_DIR + fileName), 0, 0, false);
+        return true;
+    } catch (errScene) {
+        return false;
+    }
+}
+
+function waitNavQuiet() {
+    var calm = 0;
+    while (calm < 180) {
+        if (pollNav()) calm = 0;
+        else calm += 30;
+        delay(30);
+    }
+}
+
+function showPeaks(names) {
+    var i;
+    var key;
+    if (!names || !names.length) return;
+    for (i = 0; i < names.length; i++) {
+        waitNavQuiet();
+        if (!drawSceneCard(names[i])) continue;
+        while (true) {
+            key = pollNav();
+            if (key === "sel" || key === "esc") break;
+            delay(30);
+        }
+    }
+    waitNavQuiet();
 }
 
 function drawScene(faceName, reply, scroll, fullPaint) {
@@ -815,17 +882,34 @@ function band(n) {
 }
 
 function buildPrompt() {
-    return SYSTEM_PROMPT +
+    var text = SYSTEM_PROMPT +
         " Current feelings, each low, medium, or high: horny " + band(mood.horny) +
         ", bored " + band(mood.bored) +
         ", poverty " + band(mood.poverty) +
         ", stress " + band(mood.stress) +
         ", affection " + band(mood.affection) +
         ", confidence " + band(mood.confidence) +
-        ". High horny leans toward desire and love. High stress leans toward fear and sadness. High bored leans toward annoyance. High poverty leans toward embarrassment and worry. " +
-        "High affection leans toward caring, love, and gratitude. Low affection leans toward distance and sadness. " +
-        "High confidence leans toward pride and relief. Low confidence leans toward nervousness, fear, and remorse. " +
-        "Let these feelings color how you hear Master and which emotion tag you choose.";
+        ". If a feeling below conflicts with the shy maid, obey the feeling.";
+    if (band(mood.poverty) === "high") {
+        text += " She is out of money. She is rude, talks back, and disobeys orders.";
+    }
+    if (band(mood.confidence) === "low") {
+        text += " She is unsure. She misspeaks, drops things, and cries.";
+    }
+    if (band(mood.affection) === "high") {
+        text += " She trusts Master. She may tell one short fact about herself, not all of them, and must not contradict a fact already said: the locket was her mother's; she burns toast when nervous; thunder frightens her; she cannot sleep while linen is unfolded.";
+    }
+    if (band(mood.bored) === "high") {
+        text += " She is listless. Nothing feels worth doing. She does not want to work and answers flatly.";
+    }
+    if (band(mood.stress) === "high") {
+        text += " Stress has her failing at everything. She botches the task and cannot get it right.";
+    }
+    if (band(mood.horny) === "high") {
+        text += " She turns predatory. She drops the shy maid act, pursues Master, and speaks with hunger. Use desire or love.";
+    }
+    text += " Let these feelings color how you hear Master and which emotion tag you choose.";
+    return text;
 }
 
 function isLetter(ch) {
@@ -897,6 +981,23 @@ function applyTextMood(low) {
     }
 }
 
+function actionLine(label) {
+    if (label === "Praise") return "Master praises Lucy.";
+    if (label === "Hug") return "Master hugs Lucy.";
+    if (label === "Kiss") return "Master kisses Lucy.";
+    if (label === "Pet") return "Master pets Lucy.";
+    if (label === "Pay") return "Master pays Lucy.";
+    if (label === "Thank") return "Master thanks Lucy.";
+    if (label === "Scold") return "Master scolds Lucy.";
+    if (label === "Question") return "Master asks Lucy a question.";
+    if (label === "Order") return "Master gives Lucy an order.";
+    if (label === "Condemnation") return "Master condemns Lucy.";
+    if (label === "Ignoring") return "Master ignores Lucy.";
+    if (label === "Slap") return "Master slaps Lucy.";
+    if (label === "Flog") return "Master flogs Lucy.";
+    return label;
+}
+
 function applyMood(label) {
     var low = String(label || "").toLowerCase();
     if (label === "Praise") {
@@ -959,6 +1060,33 @@ function applyMood(label) {
         bump("bored", -4);
         bump("affection", 3);
         bump("confidence", 1);
+    } else if (label === "Condemnation") {
+        bump("stress", 12);
+        bump("affection", -10);
+        bump("confidence", -12);
+        bump("horny", -4);
+        bump("bored", 3);
+        bump("poverty", 3);
+    } else if (label === "Ignoring") {
+        bump("bored", 10);
+        bump("affection", -8);
+        bump("confidence", -6);
+        bump("stress", 5);
+        bump("horny", -4);
+        bump("poverty", 3);
+    } else if (label === "Slap") {
+        bump("stress", 14);
+        bump("affection", -10);
+        bump("confidence", -8);
+        bump("horny", -6);
+        bump("poverty", 3);
+    } else if (label === "Flog") {
+        bump("stress", 18);
+        bump("affection", -14);
+        bump("confidence", -12);
+        bump("horny", -8);
+        bump("bored", 2);
+        bump("poverty", 3);
     } else {
         applyTextMood(low);
     }
@@ -979,6 +1107,35 @@ function savedTurns(messages) {
     return turns;
 }
 
+function takePeaks() {
+    var found = [];
+    var i;
+    var key;
+    for (i = 0; i < PEAK_ORDER.length; i++) {
+        key = PEAK_ORDER[i];
+        if (mood[key] === 100) {
+            if (!peakSeen[key]) found.push(key);
+            peakSeen[key] = true;
+        } else {
+            peakSeen[key] = false;
+        }
+    }
+    return found;
+}
+
+function loadPeaks(data) {
+    var i;
+    var key;
+    var stored;
+    peakSeen = { horny: false, bored: false, poverty: false, stress: false, affection: false, confidence: false };
+    for (i = 0; i < PEAK_ORDER.length; i++) {
+        key = PEAK_ORDER[i];
+        stored = data && data.peaks ? data.peaks[key] : undefined;
+        if (stored === true || stored === false) peakSeen[key] = stored;
+        else peakSeen[key] = mood[key] === 100;
+    }
+}
+
 function saveLucy(messages) {
     try {
         storage.mkdir(sdPath(DATA_DIR));
@@ -990,6 +1147,14 @@ function saveLucy(messages) {
         stress: mood.stress,
         affection: mood.affection,
         confidence: mood.confidence,
+        peaks: {
+            horny: peakSeen.horny,
+            bored: peakSeen.bored,
+            poverty: peakSeen.poverty,
+            stress: peakSeen.stress,
+            affection: peakSeen.affection,
+            confidence: peakSeen.confidence
+        },
         messages: savedTurns(messages)
     });
     try {
@@ -999,6 +1164,7 @@ function saveLucy(messages) {
 
 function loadLucy() {
     mood = { horny: 15, bored: 20, poverty: 20, stress: 15, affection: 20, confidence: 25 };
+    peakSeen = { horny: false, bored: false, poverty: false, stress: false, affection: false, confidence: false };
     var messages = [{ role: "system", content: buildPrompt() }];
     var reply = "Welcome my Master";
     var faceName = "shy";
@@ -1013,6 +1179,7 @@ function loadLucy() {
                 mood.stress = readStat(data.stress, 15);
                 mood.affection = readStat(data.affection, 20);
                 mood.confidence = readStat(data.confidence, 25);
+                loadPeaks(data);
                 if (data.messages && data.messages.length) {
                     var i;
                     for (i = 0; i < data.messages.length; i++) {
@@ -1073,8 +1240,9 @@ function showStatus() {
 }
 
 function sendAction(messages, userText, faceName, reply, scroll) {
+    var line = actionLine(userText);
     messages = refreshSystem(messages);
-    messages.push({ role: "user", content: userText });
+    messages.push({ role: "user", content: line });
     messages = trimMessages(messages);
     if (!ensureToken()) {
         return { messages: popLast(messages), face: faceName, text: reply, failed: true };
@@ -1087,6 +1255,7 @@ function sendAction(messages, userText, faceName, reply, scroll) {
     messages.push({ role: "assistant", content: raw });
     messages = trimMessages(messages);
     applyMood(userText);
+    var peaks = takePeaks();
     messages = refreshSystem(messages);
     saveLucy(messages);
     var parsed = parseReply(raw);
@@ -1095,7 +1264,8 @@ function sendAction(messages, userText, faceName, reply, scroll) {
         messages: messages,
         face: faceFor(parsed.emotion),
         text: parsed.text,
-        failed: false
+        failed: false,
+        peaks: peaks
     };
 }
 
@@ -1170,6 +1340,7 @@ function run(saved) {
                     faceName = sent.face;
                     reply = sent.text;
                     scroll = 0;
+                    showPeaks(sent.peaks);
                 }
             }
         }
